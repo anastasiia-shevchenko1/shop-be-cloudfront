@@ -3,15 +3,24 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cdk from 'aws-cdk-lib';
 import * as path from 'path';
 import { Construct } from 'constructs';
-
-const allowedOrigins = [
-  'https://d36wgq2gjat4j8.cloudfront.net/',
-  'http://localhost:4200',
-];
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import { allowedOrigins, PRODUCTS_TABLE, STOCK_TABLE } from '../constants';
+import { createProductHandler } from '../services/product-service/lambda';
 
 export class ProductServiceStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    const productsTable = dynamodb.Table.fromTableName(
+      this,
+      'ProductsTable',
+      PRODUCTS_TABLE
+    );
+    const stockTable = dynamodb.Table.fromTableName(
+      this,
+      'StockTable',
+      STOCK_TABLE
+    );
 
     const getProductsList = new lambda.Function(
       this,
@@ -24,6 +33,10 @@ export class ProductServiceStack extends cdk.Stack {
           path.join(__dirname, '..', '..', 'services', 'productService')
         ),
         handler: 'index.getProductsListHandler',
+        environment: {
+          PRODUCTS_TABLE_NAME: productsTable.tableName,
+          STOCK_TABLE_NAME: stockTable.tableName,
+        },
       }
     );
 
@@ -38,8 +51,29 @@ export class ProductServiceStack extends cdk.Stack {
           path.join(__dirname, '..', '..', 'services', 'productService')
         ),
         handler: 'index.getProductsByIdHandler',
+        environment: {
+          PRODUCTS_TABLE_NAME: productsTable.tableName,
+          STOCK_TABLE_NAME: stockTable.tableName,
+        },
       }
     );
+
+    const createProduct = new lambda.Function(this, 'CreateProductFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      memorySize: 1024,
+      timeout: cdk.Duration.seconds(5),
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, '..', '..', 'services', 'productService')
+      ),
+      handler: 'index.createProductHandler',
+      environment: {
+        PRODUCTS_TABLE_NAME: productsTable.tableName,
+        STOCK_TABLE_NAME: stockTable.tableName,
+      },
+    });
+
+    productsTable.grantWriteData(createProduct);
+    stockTable.grantWriteData(createProduct);
 
     const api = new apigateway.RestApi(this, 'ProductsApi', {
       restApiName: 'Product Service API',
@@ -98,12 +132,31 @@ export class ProductServiceStack extends cdk.Stack {
       }
     );
 
+    const createProductIntegration = new apigateway.LambdaIntegration(
+      createProduct,
+      {
+        proxy: true,
+      }
+    );
+
     const products = api.root.addResource('products');
     const product = products.addResource('{productId}');
 
     // GET /products
     products.addMethod('GET', getProductsIntegration, {
       methodResponses: [{ statusCode: '200' }],
+    });
+
+    // POST /products
+    products.addMethod('POST', createProductIntegration, {
+      methodResponses: [
+        {
+          statusCode: '200',
+        },
+        {
+          statusCode: '400',
+        },
+      ],
     });
 
     // GET /products/{productId}
@@ -120,7 +173,7 @@ export class ProductServiceStack extends cdk.Stack {
 
     products.addCorsPreflight({
       allowOrigins: allowedOrigins,
-      allowMethods: ['GET'],
+      allowMethods: ['GET', 'POST'],
     });
 
     product.addCorsPreflight({
