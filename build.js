@@ -20,7 +20,6 @@ function build(paths, outDir) {
             platform: 'node',
             target: 'node18',
             outdir: path.join('build', outDir, key),
-            external: ['aws-sdk']
         }).catch(() => process.exit(1));
         console.log(`Building: ${key}`);
     });
