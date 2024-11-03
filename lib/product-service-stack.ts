@@ -4,8 +4,14 @@ import * as cdk from 'aws-cdk-lib';
 import * as path from 'path';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import { allowedOrigins, PRODUCTS_TABLE, STOCK_TABLE } from '../constants';
-import { createProductHandler } from '../services/product-service/lambda';
+
+export const allowedOrigins = [
+  'https://d36wgq2gjat4j8.cloudfront.net/',
+  'http://localhost:4200',
+];
+
+export const PRODUCTS_TABLE = 'Products';
+export const STOCK_TABLE = 'Stock';
 
 export class ProductServiceStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -30,7 +36,7 @@ export class ProductServiceStack extends cdk.Stack {
         memorySize: 1024,
         timeout: cdk.Duration.seconds(5),
         code: lambda.Code.fromAsset(
-          path.join(__dirname, '..', '..', 'services', 'productService')
+          path.join(__dirname, '..', 'lambda', 'product-service')
         ),
         handler: 'index.getProductsListHandler',
         environment: {
@@ -48,7 +54,7 @@ export class ProductServiceStack extends cdk.Stack {
         memorySize: 1024,
         timeout: cdk.Duration.seconds(5),
         code: lambda.Code.fromAsset(
-          path.join(__dirname, '..', '..', 'services', 'productService')
+          path.join(__dirname, '..', 'lambda', 'product-service')
         ),
         handler: 'index.getProductsByIdHandler',
         environment: {
@@ -63,7 +69,7 @@ export class ProductServiceStack extends cdk.Stack {
       memorySize: 1024,
       timeout: cdk.Duration.seconds(5),
       code: lambda.Code.fromAsset(
-        path.join(__dirname, '..', '..', 'services', 'productService')
+        path.join(__dirname, '..', 'lambda', 'product-service')
       ),
       handler: 'index.createProductHandler',
       environment: {

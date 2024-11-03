@@ -1,5 +1,5 @@
 {
-  "name": "services",
+  "name": "import-service",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -9,11 +9,6 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.675.0",
-    "@aws-sdk/lib-dynamodb": "^3.675.0",
-    "uuid": "^10.0.0"
-  },
-  "devDependencies": {
-    "@types/uuid": "^10.0.0"
+    "csv-parser": "^3.0.0"
   }
 }
