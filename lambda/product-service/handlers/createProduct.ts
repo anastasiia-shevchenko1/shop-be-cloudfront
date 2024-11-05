@@ -4,21 +4,12 @@ import {
   DynamoDBDocumentClient,
   TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { headers, PRODUCTS_TABLE, STOCK_TABLE } from '../constants';
-import { randomUUID } from 'crypto';
+import { headers } from '../constants';
+import { validateProductData } from '../utils/validateProductData';
+import { collectProductData } from '../utils/collectProductData';
 
 const dbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dbClient);
-
-function validateProductData(data: any): boolean {
-  return (
-    data &&
-    typeof data?.title === 'string' &&
-    data?.title.trim() !== '' &&
-    typeof data?.price === 'number' &&
-    data.price > 0
-  );
-}
 
 export const createProductHandler: APIGatewayProxyHandler = async (
   event: APIGatewayProxyEvent
@@ -33,9 +24,9 @@ export const createProductHandler: APIGatewayProxyHandler = async (
     };
   }
 
-  let parsedBody;
+  let data;
   try {
-    parsedBody = JSON.parse(event.body);
+    data = JSON.parse(event.body);
   } catch (error) {
     return {
       statusCode: 400,
@@ -44,7 +35,7 @@ export const createProductHandler: APIGatewayProxyHandler = async (
     };
   }
 
-  if (!validateProductData(parsedBody)) {
+  if (!validateProductData(data)) {
     return {
       statusCode: 400,
       headers,
@@ -52,28 +43,7 @@ export const createProductHandler: APIGatewayProxyHandler = async (
     };
   }
 
-  const id = randomUUID();
-  const count = parsedBody.count ?? 10; // Assume default stock count as 10;
-
-  const productItem = {
-    TableName: process.env.PRODUCTS_TABLE_NAME || PRODUCTS_TABLE,
-    Item: {
-      id,
-      ...parsedBody, // Your parsed product data
-    },
-  };
-
-  const stockItem = {
-    TableName: process.env.STOCK_TABLE_NAME || STOCK_TABLE,
-    Item: {
-      product_id: id,
-      count, // Assume default stock count as 10
-    },
-  };
-
-  const params = {
-    TransactItems: [{ Put: productItem }, { Put: stockItem }],
-  };
+  const { params, productData } = collectProductData(data);
 
   try {
     await docClient.send(new TransactWriteCommand(params));
@@ -83,7 +53,7 @@ export const createProductHandler: APIGatewayProxyHandler = async (
       headers,
       body: JSON.stringify({
         message: 'Product and stock created successfully',
-        product: { ...parsedBody, id, stockCount: count },
+        product: { ...productData, stockCount: productData.count },
       }),
     };
   } catch (error) {
