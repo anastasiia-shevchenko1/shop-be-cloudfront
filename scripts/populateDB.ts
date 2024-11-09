@@ -1,14 +1,26 @@
-import * as AWS from 'aws-sdk';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocument } from '@aws-sdk/lib-dynamodb';
 import { products } from '../mocks/products';
 import { ProductData, Stock } from '../model/product';
-import { PRODUCTS_TABLE, STOCK_TABLE } from '../constants';
+import { fromEnv } from '@aws-sdk/credential-provider-env';
+
+export const PRODUCTS_TABLE = 'Products';
+export const STOCK_TABLE = 'Stock';
 
 // Configure AWS
-AWS.config.update({
+const ddbClient = new DynamoDBClient({
   region: process.env.AWS_REGION,
+  credentials: fromEnv(),
 });
 
-const dynamodb = new AWS.DynamoDB.DocumentClient();
+const docClient = DynamoDBDocument.from(ddbClient, {
+  marshallOptions: {
+    convertEmptyValues: true,
+    removeUndefinedValues: true,
+    convertClassInstanceToMap: true,
+  },
+  unmarshallOptions: { wrapNumbers: false },
+});
 
 const productsData: ProductData[] = products.map(
   ({ count, ...productData }) => productData
@@ -26,7 +38,7 @@ async function populateTables() {
       TableName: PRODUCTS_TABLE,
       Item: product,
     };
-    await dynamodb.put(params).promise();
+    await docClient.put(params);
     console.log(`Inserted product: ${product.title}`);
   }
 
@@ -36,7 +48,7 @@ async function populateTables() {
       TableName: STOCK_TABLE,
       Item: stock,
     };
-    await dynamodb.put(params).promise();
+    await docClient.put(params);
     console.log(`Inserted stock for product_id: ${stock.product_id}`);
   }
 }

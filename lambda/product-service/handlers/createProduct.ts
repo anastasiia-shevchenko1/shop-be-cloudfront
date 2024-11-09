@@ -2,11 +2,10 @@ import { APIGatewayProxyEvent, APIGatewayProxyHandler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
-  PutCommand,
   TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { headers, PRODUCTS_TABLE, STOCK_TABLE } from '../../../constants';
-import { v4 as uuidv4 } from 'uuid';
+import { headers, PRODUCTS_TABLE, STOCK_TABLE } from '../constants';
+import { randomUUID } from 'crypto';
 
 const dbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const docClient = DynamoDBDocumentClient.from(dbClient);
@@ -53,7 +52,9 @@ export const createProductHandler: APIGatewayProxyHandler = async (
     };
   }
 
-  const id = uuidv4();
+  const id = randomUUID();
+  const count = parsedBody.count ?? 10; // Assume default stock count as 10;
+
   const productItem = {
     TableName: process.env.PRODUCTS_TABLE_NAME || PRODUCTS_TABLE,
     Item: {
@@ -66,7 +67,7 @@ export const createProductHandler: APIGatewayProxyHandler = async (
     TableName: process.env.STOCK_TABLE_NAME || STOCK_TABLE,
     Item: {
       product_id: id,
-      count: 10, // Assume default stock count as 10
+      count, // Assume default stock count as 10
     },
   };
 
@@ -82,7 +83,7 @@ export const createProductHandler: APIGatewayProxyHandler = async (
       headers,
       body: JSON.stringify({
         message: 'Product and stock created successfully',
-        product: { ...parsedBody, id, stockCount: 10 },
+        product: { ...parsedBody, id, stockCount: count },
       }),
     };
   } catch (error) {
