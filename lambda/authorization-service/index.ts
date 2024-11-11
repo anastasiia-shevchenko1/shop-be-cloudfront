@@ -1,0 +1,1 @@
+export { basicAuthorizerHandler } from './handlers/basicAuthorizer';
