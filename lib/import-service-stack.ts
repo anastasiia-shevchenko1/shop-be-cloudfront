@@ -9,6 +9,7 @@ import {
 import * as path from 'path';
 import { Construct } from 'constructs';
 import { HttpMethods } from 'aws-cdk-lib/aws-s3';
+import * as dotenv from 'dotenv';
 
 export class ImportServiceStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -42,10 +43,22 @@ export class ImportServiceStack extends cdk.Stack {
       ],
     });
 
-    const basicAuthorizerArn = cdk.Fn.importValue('BasicAuthorizerFunctionArn');
-    const basicAuthorizerLambda = lambda.Function.fromFunctionArn(this, 'ImportedBasicAuthorizer', basicAuthorizerArn);
+    // const basicAuthorizerArn = cdk.Fn.importValue('BasicAuthorizerFunctionArn');
+    // const basicAuthorizerLambda = lambda.Function.fromFunctionArn(this, 'ImportedBasicAuthorizer', basicAuthorizerArn);
 
-    console.log('basicAuthorizerLambda', basicAuthorizerLambda);
+    const envPath = path.join(__dirname, '..', '.env');
+    const envVars = dotenv.config({ path: envPath }).parsed || {};
+
+    const basicAuthorizerLambda = new lambda.Function(this, 'BasicAuthorizerFunc', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      memorySize: 1024,
+      timeout: cdk.Duration.seconds(5),
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, '..', 'lambda', 'authorization-service')
+      ),
+      handler: 'index.basicAuthorizerHandler',
+      environment: envVars
+    });
 
     const api = new apigateway.RestApi(this, 'importApi', {
       restApiName: 'Import Service',
