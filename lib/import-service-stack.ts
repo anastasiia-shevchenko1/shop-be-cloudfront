@@ -9,6 +9,7 @@ import {
 import * as path from 'path';
 import { Construct } from 'constructs';
 import { HttpMethods } from 'aws-cdk-lib/aws-s3';
+import * as dotenv from 'dotenv';
 
 export class ImportServiceStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -32,7 +33,6 @@ export class ImportServiceStack extends cdk.Stack {
         },
       ],
     });
-
     bucket.addLifecycleRule({
       prefix: 'uploaded/',
       transitions: [
@@ -41,6 +41,36 @@ export class ImportServiceStack extends cdk.Stack {
           storageClass: s3.StorageClass.INFREQUENT_ACCESS,
         },
       ],
+    });
+
+    // const basicAuthorizerArn = cdk.Fn.importValue('BasicAuthorizerFunctionArn');
+    // const basicAuthorizerLambda = lambda.Function.fromFunctionArn(this, 'ImportedBasicAuthorizer', basicAuthorizerArn);
+
+    const envPath = path.join(__dirname, '..', '.env');
+    const envVars = dotenv.config({ path: envPath }).parsed || {};
+
+    const basicAuthorizerLambda = new lambda.Function(this, 'BasicAuthorizerFunc', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      memorySize: 1024,
+      timeout: cdk.Duration.seconds(5),
+      code: lambda.Code.fromAsset(
+        path.join(__dirname, '..', 'lambda', 'authorization-service')
+      ),
+      handler: 'index.basicAuthorizerHandler',
+      environment: envVars
+    });
+
+    const api = new apigateway.RestApi(this, 'importApi', {
+      restApiName: 'Import Service',
+      description: 'This service import product files',
+      deployOptions: {
+        stageName: 'dev',
+      },
+    });
+
+    const authorizer = new apigateway.TokenAuthorizer(this, 'BasicAuthorizer', {
+      handler: basicAuthorizerLambda,
+      identitySource: 'method.request.header.Authorization'
     });
 
     // ImportProductsFile Lambda
@@ -56,24 +86,17 @@ export class ImportServiceStack extends cdk.Stack {
       },
     });
 
-    const policy = new iam.PolicyStatement({
+    importProductsFile.addToRolePolicy(new iam.PolicyStatement({
       actions: ['s3:GetObject', 's3:PutObject'],
       resources: [bucket.bucketArn + '/uploaded/*'],
-    });
-    importProductsFile.addToRolePolicy(policy);
-
-    const api = new apigateway.RestApi(this, 'importApi', {
-      restApiName: 'Import Service',
-      description: 'This service import product files',
-      deployOptions: {
-        stageName: 'dev',
-      },
-    });
+    }));
 
     const integration = new apigateway.LambdaIntegration(importProductsFile);
 
     const resource = api.root.addResource('import');
     resource.addMethod('GET', integration, {
+      authorizer: authorizer,
+      authorizationType: apigateway.AuthorizationType.CUSTOM,
       methodResponses: [
         {
           statusCode: '200',
